@@ -1,0 +1,5 @@
+-f Microsoft.AspNetCore.App
+-u ExampleProj.*
+!-u ExampleProj.Pages
+!-u ExampleProj.Pages.*
+--submitPromptDetailedKeys Ctrl+N

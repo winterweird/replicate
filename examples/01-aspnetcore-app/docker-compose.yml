@@ -1,0 +1,9 @@
+services:
+  repl:
+    image: vegarditland/replicate:latest
+    volumes:
+      - ../src/ExampleProj/bin/Debug/net7.0:/libs/ExampleProj.bin
+      - ../src/ExampleProj/obj/Debug/net7.0:/libs/ExampleProj.obj
+      - .:/app
+    environment:
+      REPL_FRAMEWORK: Microsoft.AspNetCore.App
