@@ -73,8 +73,12 @@ fi
 [ $VERBOSE ] && echo "Running preprocessing of response file DONE!"
 [ $VERBOSE ] && echo "Response file:" && cat "$REPL_RSP_FILE" && echo ""
 
-#[ $VERBOSE ] && echo "Running service accessor code generation..."
-#eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD"
-#[ $VERBOSE ] && echo "Running service accessor code generation DONE!"
+[ $VERBOSE ] && echo "Running service accessor code generation..."
+if [[ $VERBOSE == 2 ]]; then
+    eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD"
+else
+    eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD" 2>&1 > /dev/null
+fi
+[ $VERBOSE ] && echo "Running service accessor code generation DONE!"
 
 exec /root/.dotnet/tools/csharprepl "@$REPL_RSP_FILE" "$REPL_SCRIPT_FILE" "$@"

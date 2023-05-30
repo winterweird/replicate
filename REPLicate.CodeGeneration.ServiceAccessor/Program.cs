@@ -1,70 +1,102 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Scripting;
+﻿using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using Microsoft.Extensions.DependencyInjection;
+using REPLicate.Services;
 
+var rspFile = System.Environment.GetEnvironmentVariable("REPL_RSP_FILE");
 var ctxFile = System.Environment.GetEnvironmentVariable("REPL_SCRIPT_FILE");
 var libsPath = System.Environment.GetEnvironmentVariable("REPL_LIBS_PATH")!;
 
 var program = File.ReadAllText(ctxFile!);
-var options = ScriptOptions.Default.WithReferences(
-    typeof(Microsoft.AspNetCore.Builder.WebApplication).Assembly,
-    typeof(System.Net.Http.Json.JsonContent).Assembly,
-    typeof(Microsoft.Extensions.DependencyInjection.IMvcBuilder).Assembly
-);
 
-ScriptState<object> script = await CSharpScript.RunAsync("var args = new string[] {};", options);
+var lines = File.ReadAllLines(rspFile!);
+var references = FileReader.ExtractReferenceFilePaths(lines);
 
-// TODO: Refactor this logic
-var globalUsingsFiles = Directory.EnumerateFiles(libsPath, "*.GlobalUsings.g.cs", SearchOption.AllDirectories);
-foreach (var globalUsing in globalUsingsFiles) {
-  Console.WriteLine($"Processing global using file { globalUsing }");
-  foreach (var l in File.ReadLines(globalUsing)) {
-    if (l.StartsWith("global using global::")) {
-      var lStripped = l.Replace("global using global::", "");
-      script = await script.ContinueWithAsync($"using { lStripped }");
+var assemblies = AssemblyLoader.LoadAllReferences(references);
+var usings = FileReader.ExtractUsingAndGlobalUsingStatements(lines, libsPath);
+
+var options = ScriptOptions.Default.WithReferences(assemblies);
+
+var usingStatements = usings.Select(u => $"using { u };");
+
+// Initialize with using statements
+ScriptState<object> script = await CSharpScript.RunAsync("", options);
+
+
+foreach (var u in usingStatements) {
+    try {
+        script = await script.ContinueWithAsync(u, options);
+    } catch (Exception) {
+        // Console.WriteLine($"ERROR RUNNING {u}: {e}");
     }
-  }
-  Console.WriteLine($"Done processing global using file { globalUsing }");
 }
 
+// Create 'args' variable because it's not present in C# scripts for some
+// reason.
+script = await script.ContinueWithAsync("var args = new string[] {};", options);
+
+// Run program
 script = await script.ContinueWithAsync(program, options);
-var processServices = @"
-static string PrettyTypeName(Type t)
-{
-    if (t.IsArray)
-    {
-        return PrettyTypeName(t.GetElementType()!) + ""[]"";
+
+var servicesResult = await script.ContinueWithAsync($"return builder.Services;");
+var services = (IServiceCollection)servicesResult.ReturnValue;
+
+var REPLACE_TYPE_ARGS = new Regex(@"<.*>");
+
+var workingTypes = new List<(string, string, string)>();
+
+foreach (var s in services) {
+    if (s.ImplementationType is null) {
+        continue;
     }
 
-    if (t.IsGenericType)
-    {
-        var nm = t.FullName ?? t.Name;
-        var sqbidx = nm.IndexOf(""["");
-        var chk = sqbidx > -1 ? sqbidx : nm.Length;
-        var genericPart = string.Format(
-                ""{0}<{1}>"",
-                nm.Substring(0, nm.LastIndexOf(""`"", chk, StringComparison.InvariantCulture)),
-                string.Join("", "", t.GetGenericArguments().Select(PrettyTypeName)));
+    var stype = PrettyTypeName(s.ServiceType, true);
+    var itype = PrettyTypeName(s.ImplementationType);
+    var vname = REPLACE_TYPE_ARGS.Replace(itype, "").Split(".").Last();
 
-        if (t.Name.LastIndexOf(""`"") == -1) {
-            genericPart += ""."" + t.Name;
-        }
-        return genericPart.Replace(""+"", ""."");
+    // Check if line works
+    var testLine = $"{ stype } { vname } = app.Services.CreateScope().ServiceProvider.GetRequiredService<{ stype }>();";
+    Console.WriteLine(testLine);
+    bool works;
+    try {
+        await script.ContinueWithAsync(testLine, options);
+        works = true;
+    } catch (Exception e) {
+        Console.WriteLine($"OOPS: {e}");
+        works = false;
     }
-
-    return t.Name.Replace(""+"", ""."");
+    if (works) {
+        Console.WriteLine($"{ stype } => { itype }");
+        workingTypes.Add((stype, itype, vname));
+    }
 }
-foreach (var service in builder.Services) {
-    if (service.ImplementationType is not null) {
-        Console.WriteLine(PrettyTypeName(service));
-    }
-}
+
+workingTypes = workingTypes.GroupBy(t => t.Item3)
+    .Where(g => g.Count() == 1)
+    .Select(g => g.First())
+    .ToList();
+
+program += @"
+var svc = new AppServiceAccessor(app);
+internal class AppServiceAccessor {
+    private readonly IServiceProvider sp;
+    internal AppServiceAccessor(WebApplication app) => sp = app.Services.CreateScope().ServiceProvider;
 ";
-await script.ContinueWithAsync(processServices, options);
 
-System.Environment.Exit(0);
+foreach (var t in workingTypes) {
+    program += $"    internal { t.Item1 } { t.Item3 } => sp.GetRequiredService<{ t.Item1 }>();\n";
+}
 
-static string PrettyTypeName(Type t)
-{
+program += "}";
+
+Console.WriteLine($"PROGRAM:\n{program}");
+
+File.WriteAllText(ctxFile!, program);
+
+static string PrettyTypeName(Type t, bool fullname = false) {
+    var nm = t.FullName ?? t.Name;
+
     if (t.IsArray)
     {
         return PrettyTypeName(t.GetElementType()!) + "[]";
@@ -72,19 +104,18 @@ static string PrettyTypeName(Type t)
 
     if (t.IsGenericType)
     {
-        var nm = t.FullName ?? t.Name;
         var sqbidx = nm.IndexOf("[");
         var chk = sqbidx > -1 ? sqbidx : nm.Length;
         var genericPart = string.Format(
                 "{0}<{1}>",
                 nm.Substring(0, nm.LastIndexOf("`", chk, StringComparison.InvariantCulture)),
-                string.Join(", ", t.GetGenericArguments().Select(PrettyTypeName)));
+                string.Join(", ", t.GetGenericArguments().Select(w => PrettyTypeName(w, fullname))));
 
         if (t.Name.LastIndexOf("`") == -1) {
-            genericPart += "." + t.Name;
+            genericPart += "." + (fullname ? nm : t.Name);
         }
         return genericPart.Replace("+", ".");
     }
 
-    return t.Name.Replace("+", ".");
+    return fullname ? nm.Replace("+", ".") : t.Name.Replace("+", ".");
 }

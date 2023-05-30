@@ -12,7 +12,7 @@ AssemblyLoader.LoadAllReferences(referenceFilePaths);
 Console.WriteLine("Done loading references");
 
 
-var usingStatements = FileReader.ExtractUsingStatements(lines);
+var usingStatements = FileReader.ExtractUsingAndGlobalUsingStatements(lines, libsPath);
 
 var globalUsingsFiles = Directory.EnumerateFiles(
     libsPath,

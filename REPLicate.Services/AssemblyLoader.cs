@@ -3,16 +3,23 @@ using System.Reflection;
 namespace REPLicate.Services;
 
 public static class AssemblyLoader {
-    public static void LoadAllReferences(IEnumerable<string> references) {
+    public static ICollection<Assembly> LoadAllReferences(IEnumerable<string> references) {
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies().ToList();
+        foreach (var v in assemblies) {
+            Console.WriteLine($"FOUND LOADED ASSEMBLY { v }");
+        }
         foreach (var refname in references) {
             Console.WriteLine($"Loading reference { refname }");
             try {
-                Assembly.LoadFrom(refname);
+                var asm = Assembly.LoadFrom(refname);
+                assemblies.Add(asm);
                 Console.WriteLine($"Loaded reference {refname}");
             } catch (Exception e) {
                 Console.WriteLine($"Error loading reference: { e }");
             }
         }
+
+        return assemblies;
     }
 
     public static ICollection<string> GetLoadedNamespaces() {

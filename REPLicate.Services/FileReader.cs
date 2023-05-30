@@ -17,6 +17,17 @@ public static class FileReader {
     private static Regex GLOB_MATCHER = new Regex(@"\.\*$");
     private static Regex GLOB_WILDCARD_MATCHER = new Regex(@"\*$");
 
+    public static ICollection<string> ExtractUsingAndGlobalUsingStatements(IEnumerable<string> lines, string libsPath) {
+        var files = Directory.EnumerateFiles(
+            libsPath,
+            "*.GlobalUsings.g.cs",
+            SearchOption.AllDirectories
+        );
+        return ExtractUsingStatements(lines)
+            .Concat(ExtractUsingStatementsFromGlobalUsingsFiles(files))
+            .ToList();
+    }
+
     public static ICollection<string> ExtractUsingStatementsFromGlobalUsingsFiles(IEnumerable<string> files) {
         return files.SelectMany(ExtractGlobalUsingStatementsFromFile).Distinct().ToList();
     }
