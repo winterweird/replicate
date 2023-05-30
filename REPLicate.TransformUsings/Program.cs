@@ -23,7 +23,7 @@ foreach (var l in lines) {
     }
     else {
       // treat as str
-      referenceExclusionMatchers.Add(s => s == str);
+      referenceExclusionMatchers.Add(s => { Console.WriteLine($"Comparing exclude pattern '{str}' to file '{s}'"); return s == str; });
     }
   }
   else if (l.StartsWith("!-u ") || l.StartsWith("!--using ")) {
@@ -103,6 +103,15 @@ foreach (var l in lines) {
   }
   else if (l.StartsWith("!")) {
     Console.WriteLine($"Skipping exclusion pattern: {l}");
+  }
+  else if (l.StartsWith("-r")) {
+    var refOpt = l.Replace("-r ", "").Replace("--reference", "");
+    if (referenceExclusionMatchers.Any(isMatch => isMatch(refOpt))) {
+      Console.WriteLine($"Skipping excluded reference { refOpt }");
+      continue;
+    }
+    Console.WriteLine($"Adding reference { refOpt }");
+    linesInNewFile.Add(l);
   }
   else {
     Console.WriteLine($"Adding non-matching line {l}");
