@@ -1,10 +1,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 
-WORKDIR /src/Replicate.TransformUsings
+WORKDIR /src/REPLicate.Services
+COPY REPLicate.Services/ .
+
+WORKDIR /src/REPLicate.TransformUsings
 COPY REPLicate.TransformUsings/ .
 RUN dotnet build -c Release -o /out
 
-WORKDIR /src/Replicate.CodeGeneration.ServiceAccessor
+WORKDIR /src/REPLicate.CodeGeneration.ServiceAccessor
 COPY REPLicate.CodeGeneration.ServiceAccessor .
 RUN dotnet build -c Release -o /out
 
