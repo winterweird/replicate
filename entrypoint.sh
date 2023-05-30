@@ -24,7 +24,7 @@ done
 include_libs
 
 # Processing arguments
-VALID_ARGS=$(getopt -o f:u: --long --framework:,using: -- ${ARGUMENTS[*]})
+VALID_ARGS=$(getopt -o f:u: --long --use-svc-code-generation,use-svc-codegen,framework:,using: -- ${ARGUMENTS[*]})
 
 if [[ $? -ne 0 ]]; then
     exit 1;
@@ -43,6 +43,10 @@ while [ : ]; do
         OPTION_FRAMEWORK="$2"
         shift 2
         ;;
+    --use-svc-code-generation | --use-svc-codegen)
+        SVC_CODE_GENERATION=1
+        shift
+        ;;
     --) shift;
         break
         ;;
@@ -57,6 +61,7 @@ REPL_FRAMEWORK=${OPTION_FRAMEWORK:-${REPL_FRAMEWORK:-${FILE_FRAMEWORK:-Microsoft
 
 [ $VERBOSE ] && echo "Framework found in response file: $FILE_FRAMEWORK"
 [ $VERBOSE ] && echo "Chosen framework: $REPL_FRAMEWORK"
+
 
 # Ensure correct framework present in rsp file
 sed -i '/^-f \|^--framework /d' "$REPL_RSP_FILE"
@@ -73,12 +78,19 @@ fi
 [ $VERBOSE ] && echo "Running preprocessing of response file DONE!"
 [ $VERBOSE ] && echo "Response file:" && cat "$REPL_RSP_FILE" && echo ""
 
-[ $VERBOSE ] && echo "Running service accessor code generation..."
-if [[ $VERBOSE == 2 ]]; then
-    eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD"
-else
-    eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD" 2>&1 > /dev/null
+if [ $SVC_CODE_GENERATION ] || grep "^--use-svc-code-generation\|^--use-svc-codegen" "$REPL_RSP_FILE" ; then
+    # remove unrecognized option
+    sed -i '/^--use-svc-code-generation\|^--use-svc-codegen/d' "$REPL_RSP_FILE"
+
+    [ $VERBOSE ] && echo "Running service accessor code generation..."
+
+    if [[ $VERBOSE == 2 ]]; then
+        eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD"
+    else
+        eval "$REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD" 2>&1 > /dev/null
+    fi
+
+    [ $VERBOSE ] && echo "Running service accessor code generation DONE!"
 fi
-[ $VERBOSE ] && echo "Running service accessor code generation DONE!"
 
 exec /root/.dotnet/tools/csharprepl "@$REPL_RSP_FILE" "$REPL_SCRIPT_FILE" "$@"
