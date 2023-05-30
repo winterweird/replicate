@@ -1,7 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 
-WORKDIR /src
+WORKDIR /src/Replicate.TransformUsings
 COPY REPLicate.TransformUsings/ .
+RUN dotnet build -c Release -o /out
+
+WORKDIR /src/Replicate.CodeGeneration.ServiceAccessor
+COPY REPLicate.CodeGeneration.ServiceAccessor .
 RUN dotnet build -c Release -o /out
 
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS runtime
@@ -22,6 +26,7 @@ ENV REPL_LIBS_PATH=/libs
 ENV REPL_RSP_FILE=$CFG/repl.rsp
 ENV REPL_SCRIPT_FILE=$CFG/repl.csx
 ENV REPL_RSP_PREPROCESSING_CMD="dotnet $CFG/scripts/REPLicate.TransformUsings.dll"
+ENV REPL_SERVICE_ACCESSOR_CODE_GENERATION_CMD="dotnet $CFG/scripts/REPLicate.CodeGeneration.ServiceAccessor.dll"
 
 # Add entrypoint
 COPY entrypoint.sh $CFG/entrypoint.sh

@@ -1,5 +1,4 @@
-using System.Reflection;
-using System.Text.RegularExpressions;
+using System.Reflection; using System.Text.RegularExpressions;
 
 var rspPath = System.Environment.GetEnvironmentVariable("REPL_RSP_FILE")!;
 var libsPath = System.Environment.GetEnvironmentVariable("REPL_LIBS_PATH")!;
